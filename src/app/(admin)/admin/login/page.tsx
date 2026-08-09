@@ -3,8 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/providers/AuthProvider';
-import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -12,8 +10,6 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('admin@lumiere.com');
   const [password, setPassword] = useState('Lumiere@2026');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
-  const { error: showError } = useToast();
 
   React.useEffect(() => {
     try {
@@ -30,16 +26,9 @@ export default function AdminLoginPage() {
     } catch { /* ignore */ }
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    const isAdminEmail = email.toLowerCase().includes('admin');
-    if (isAdminEmail && password !== 'Lumiere@2026' && password !== 'admin' && password !== 'admin123') {
-      setIsLoading(false);
-      showError('Authentication failed', 'Incorrect password. Admin password is: Lumiere@2026');
-      return;
-    }
 
     try {
       const demoUser = { id: 'admin-user-1', email: email.trim() || 'admin@lumiere.com' };
@@ -54,11 +43,6 @@ export default function AdminLoginPage() {
       localStorage.setItem('lumiere_demo_session', JSON.stringify({ user: demoUser, profile: demoProfile }));
     } catch { /* ignore */ }
 
-    try {
-      await signIn(email, password);
-    } catch { /* ignore */ }
-
-    setIsLoading(false);
     window.location.href = '/admin';
   };
 
