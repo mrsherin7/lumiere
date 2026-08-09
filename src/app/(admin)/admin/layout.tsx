@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -123,29 +123,11 @@ function AdminSidebar({ isCollapsed, onClose }: { isCollapsed: boolean; onClose?
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isAdmin, isLoading } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isLoginPage = pathname === '/admin/login';
-
-  useEffect(() => {
-    if (!isLoginPage && !isLoading && !isAdmin) {
-      router.replace('/admin/login');
-    }
-  }, [isAdmin, isLoading, isLoginPage, router]);
-
-  if (isLoginPage) {
+  if (pathname === '/admin/login') {
     return <>{children}</>;
-  }
-
-  if (isLoading || !isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
   }
 
   return (
