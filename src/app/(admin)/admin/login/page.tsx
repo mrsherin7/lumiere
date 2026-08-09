@@ -24,6 +24,8 @@ export default function AdminLoginPage() {
       };
       localStorage.setItem('lumiere_demo_session', JSON.stringify({ user: demoUser, profile: demoProfile }));
     } catch { /* ignore */ }
+
+    window.location.href = '/admin';
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
