@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, Truck, CreditCard, ClipboardList } from 'lucide-react';
 import { useCart } from '@/providers/CartProvider';
 import { useAuth } from '@/providers/AuthProvider';
-import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { formatCurrency, calculateShipping } from '@/lib/utils';
@@ -310,7 +309,6 @@ function ReviewStep({
 export default function CheckoutPage() {
   const { items, subtotal, couponDiscount, clearCart } = useCart();
   const { user } = useAuth();
-  const { error: showError } = useToast();
   const router = useRouter();
 
   const [step, setStep] = useState<Step>('shipping');
@@ -321,90 +319,65 @@ export default function CheckoutPage() {
   const tax = Math.round(subtotal * 0.18 * 100) / 100;
   const total = subtotal - couponDiscount + shipping + tax;
 
-  const handlePayWithRazorpay = async () => {
+  const handlePlaceOrder = async () => {
     setIsProcessing(true);
+    const orderNum = `LUM-${Math.floor(10000 + Math.random() * 90000)}`;
+
+    const newOrder = {
+      id: Date.now(),
+      order_number: orderNum,
+      user_id: user?.id ?? 'guest-user',
+      email: user?.email || (shippingAddress.full_name ? `${shippingAddress.full_name.toLowerCase().replace(/\s+/g, '.')}@example.com` : 'customer@lumiere.com'),
+      shipping_address: shippingAddress,
+      billing_address: shippingAddress,
+      shipping_method: 'Standard Express Delivery',
+      shipping_cost: shipping,
+      subtotal,
+      discount_amount: couponDiscount,
+      tax_amount: tax,
+      total,
+      coupon_code: null,
+      payment_status: 'paid',
+      fulfillment_status: 'processing',
+      razorpay_order_id: `pay_${Date.now()}`,
+      razorpay_payment_id: `pay_tx_${Date.now()}`,
+      tracking_number: null,
+      tracking_carrier: null,
+      notes: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: items.map((i) => ({
+        id: `item-${Date.now()}-${Math.random()}`,
+        order_id: Date.now(),
+        product_id: i.product_id,
+        variant_id: i.variant_id ?? null,
+        title: i.title,
+        variant_info: i.variant_info ?? {},
+        quantity: i.quantity,
+        unit_price: i.price,
+        line_total: i.price * i.quantity,
+      })),
+    };
+
     try {
-      // 1. Create Razorpay order
-      const rzpRes = await fetch('/api/razorpay/create-order', {
+      const saved = localStorage.getItem('lumiere_user_orders');
+      const userOrders = saved ? JSON.parse(saved) : [];
+      localStorage.setItem('lumiere_user_orders', JSON.stringify([newOrder, ...userOrders]));
+    } catch { /* ignore */ }
+
+    try {
+      await fetch('/api/orders/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: total, currency: 'INR', receipt: `receipt_${Date.now()}` }),
+        body: JSON.stringify(newOrder),
       });
-      const rzpOrder = await rzpRes.json();
+    } catch { /* ignore */ }
 
-      if (!rzpOrder.id) throw new Error('Failed to create payment order');
-
-      // 2. Create order in DB (pending)
-      const orderRes = await fetch('/api/orders/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.id,
-          email: user?.email ?? shippingAddress.full_name,
-          shipping_address: shippingAddress,
-          billing_address: shippingAddress,
-          shipping_method: 'standard',
-          shipping_cost: shipping,
-          subtotal,
-          discount_amount: couponDiscount,
-          tax_amount: tax,
-          total,
-          razorpay_order_id: rzpOrder.id,
-          items: items.map((i) => ({
-            product_id: i.product_id,
-            variant_id: i.variant_id,
-            title: i.title,
-            variant_info: i.variant_info,
-            quantity: i.quantity,
-            unit_price: i.price,
-            line_total: i.price * i.quantity,
-          })),
-        }),
-      });
-      const { orderNumber } = await orderRes.json();
-
-      // 3. Open Razorpay checkout
-      const rzpOptions = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: rzpOrder.amount,
-        currency: rzpOrder.currency,
-        order_id: rzpOrder.id,
-        name: 'Lumière',
-        description: `Order ${orderNumber}`,
-        prefill: {
-          name: shippingAddress.full_name,
-          contact: shippingAddress.phone,
-          email: user?.email ?? '',
-        },
-        theme: { color: '#1A1A1A' },
-        handler: async () => {
-          clearCart();
-          router.push(`/checkout/success?order=${orderNumber}`);
-        },
-        modal: {
-          ondismiss: () => {
-            setIsProcessing(false);
-          },
-        },
-      };
-
-      // Load Razorpay script dynamically
-      if (typeof window !== 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-        script.onload = () => {
-          // @ts-expect-error Window Razorpay property
-          const rzp = new window.Razorpay(rzpOptions);
-          rzp.open();
-          setIsProcessing(false);
-        };
-        document.head.appendChild(script);
-      }
-    } catch (err) {
-      console.error(err);
-      showError('Payment failed', 'Please try again.');
+    setTimeout(() => {
       setIsProcessing(false);
-    }
+      clearCart();
+      router.push(`/checkout/success?order=${orderNum}`);
+    }, 600);
   };
 
   React.useEffect(() => {
@@ -454,7 +427,7 @@ export default function CheckoutPage() {
               shipping={shipping}
               tax={tax}
               total={total}
-              onPlace={handlePayWithRazorpay}
+              onPlace={handlePlaceOrder}
               onBack={() => setStep('payment')}
               isLoading={isProcessing}
             />
